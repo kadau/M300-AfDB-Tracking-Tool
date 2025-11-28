@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>M300 AfDB Tracking Tool — Final</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="styles.css" />
+  <!-- libs locales (placez-les dans ./lib) -->
+  <script src="lib/xlsx.full.min.js"></script>
+  <script src="lib/FileSaver.min.js"></script>
+  <script src="lib/chart.min.js"></script>
+  <link rel="stylesheet" href="lib/leaflet.css" />
+  <script src="lib/leaflet.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="lib/afdb_logo.png" alt="AfDB" id="logo" />
+      <div>
+        <div class="title">M300 AfDB Tracking Tool — Final</div>
+        <div class="subtitle">Offline — AfDB Corporate Style</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="filters">
+        <label>Region</label>
+        <select id="filter-region" multiple></select>
+        <label>Country</label>
+        <select id="filter-country" multiple></select>
+        <label>Loan Purpose</label>
+        <select id="filter-loan" multiple></select>
+      </div>
+
+      <div class="actions">
+        <button id="btn-apply" class="btn primary">Apply</button>
+        <button id="btn-reset" class="btn">Reset</button>
+        <input id="file-input" type="file" accept=".xlsx,.csv" style="display:none" />
+        <button id="btn-load" class="btn">Charger Excel</button>
+        <button id="btn-export" class="btn primary">Export CSV</button>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="mission">Mission 300</button>
+    <button class="tab" data-tab="others">Others key indicators</button>
+    <button class="tab" data-tab="financing">Financing</button>
+    <button class="tab" data-tab="details">Details by project</button>
+  </nav>
+
+  <main id="main">
+    <!-- MISSION 300 -->
+    <section id="tab-mission" class="tab-panel active">
+      <!-- GROUPE 1 -->
+      <div class="group">
+        <h2>Number of electricity connections</h2>
+        <div class="table-wrapper">
+          <table id="connections-table" class="wide-table">
+            <thead>
+              <tr>
+                <th rowspan="2">Indicator</th>
+                <th colspan="2">All supply systems</th>
+                <th colspan="2">On-grid</th>
+                <th colspan="2">Mini-grid</th>
+                <th colspan="2">Off-grid</th>
+              </tr>
+              <tr>
+                <th>Expected</th><th>Delivered</th>
+                <th>Expected</th><th>Delivered</th>
+                <th>Expected</th><th>Delivered</th>
+                <th>Expected</th><th>Delivered</th>
+              </tr>
+            </thead>
+            <tbody id="connections-body"></tbody>
+          </table>
+        </div>
+
+        <div class="gauges-row" id="connections-gauges">
+          <div class="gcol" id="gcol-as"></div>
+          <div class="gcol" id="gcol-og"></div>
+          <div class="gcol" id="gcol-mg"></div>
+          <div class="gcol" id="gcol-of"></div>
+        </div>
+      </div>
+
+      <!-- GROUPE 2 -->
+      <div class="group">
+        <h2>People provided with access to electricity (Households)</h2>
+
+        <div class="table-wrapper">
+          <table id="households-table" class="wide-table">
+            <thead>
+              <tr>
+                <th rowspan="2">Indicator</th>
+                <th colspan="2">All supply systems</th>
+                <th colspan="2">On-grid</th>
+                <th colspan="2">Mini-grid</th>
+                <th colspan="2">Off-grid</th>
+              </tr>
+              <tr>
+                <th>Expected</th><th>Delivered</th>
+                <th>Expected</th><th>Delivered</th>
+                <th>Expected</th><th>Delivered</th>
+                <th>Expected</th><th>Delivered</th>
+              </tr>
+            </thead>
+            <tbody id="households-body"></tbody>
+          </table>
+        </div>
+
+        <div class="gauge-single-row" id="households-gauges"></div>
+
+        <div class="table-wrapper">
+          <table id="reporting-table" class="reporting-table">
+            <thead>
+              <tr>
+                <th rowspan="2" style="text-align:left">Indicator</th>
+                <th class="achieved-group" colspan="3">Achieved (2023–2025)</th>
+                <th class="expected-group" colspan="5">Expected (2026–2030)</th>
+              </tr>
+              <tr>
+                <th>2023</th><th>2024</th><th>2025</th>
+                <th>2026</th><th>2027</th><th>2028</th><th>2029</th><th>2030</th>
+              </tr>
+            </thead>
+            <tbody id="reporting-body"></tbody>
+          </table>
+        </div>
+
+        <div id="waterfall-container">
+          <canvas id="waterfall-chart"></canvas>
+        </div>
+
+        <div id="map-mission" class="map map-bottom"></div>
+      </div>
+    </section>
+
+    <!-- OTHERS -->
+    <section id="tab-others" class="tab-panel">
+      <h2>Others key indicators</h2>
+      <div class="others-row">
+        <div class="oki-card" id="oki-power">
+          <h3>Power capacity installed (MW)</h3>
+          <div class="mini-gauge" id="g-power"></div>
+          <div class="mini-stats" id="g-power-stats"></div>
+        </div>
+        <div class="oki-card" id="oki-trans">
+          <h3>Cross-border and National Transmission Lines (KM)</h3>
+          <div class="mini-gauge" id="g-trans"></div>
+          <div class="mini-stats" id="g-trans-stats"></div>
+        </div>
+        <div class="oki-card" id="oki-dist">
+          <h3>New or improved power distribution lines (KM)</h3>
+          <div class="mini-gauge" id="g-dist"></div>
+          <div class="mini-stats" id="g-dist-stats"></div>
+        </div>
+      </div>
+
+      <div id="map-oki" class="map map-bottom"></div>
+    </section>
+
+    <!-- FINANCING -->
+    <section id="tab-financing" class="tab-panel">
+      <h2>Financing</h2>
+      <div class="fin-grid">
+        <div class="fin-table">
+          <table id="financing-table">
+            <tbody id="fin-body"></tbody>
+          </table>
+        </div>
+        <div class="fin-pie">
+          <canvas id="fin-pie"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- DETAILS -->
+    <section id="tab-details" class="tab-panel">
+      <h2>Details by project</h2>
+      <div class="details-toolbar">
+        <input id="details-search" placeholder="Rechercher project, code ou pays..." />
+        <button id="details-export" class="btn">Export CSV</button>
+      </div>
+      <div class="table-wrapper">
+        <table id="details-table" class="wide-table">
+          <thead id="details-head"></thead>
+          <tbody id="details-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <small>Offline — M300 AfDB Tracking Tool</small>
+  </footer>
+
+  <!-- App JS (4 blocs) -->
+  <script src="app.part1.js"></script>
+  <script src="app.part2.js"></script>
+  <script src="app.part3.js"></script>
+  <script src="app.part4.js"></script>
+</body>
+</html>
