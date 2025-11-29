@@ -47,6 +47,13 @@ fileInput.addEventListener('change', handleFileUpload);
 
 function handleFileUpload(e){
   const f = e.target.files[0];
+/* ---------- File load ---------- */
+const fileInput = document.getElementById('file-input');
+document.getElementById('btn-load').addEventListener('click', ()=> fileInput.click());
+fileInput.addEventListener('change', handleFileUpload);
+
+// --- NOUVELLE FONCTION PARSEFILE ---
+function parseFile(f) {
   if(!f) return;
   const reader = new FileReader();
   reader.onload = function(evt){
@@ -81,6 +88,28 @@ function handleFileUpload(e){
   };
   reader.readAsArrayBuffer(f);
 }
+// --- FIN NOUVELLE FONCTION PARSEFILE ---
+
+// --- MISE À JOUR DE HANDLEFILEUPLOAD ---
+function handleFileUpload(e){
+  const f = e.target.files[0];
+  parseFile(f); // Appelle la nouvelle fonction
+}
+
+/* auto load default M300-Database.xlsx if present (from same folder) */
+async function tryAutoLoad(){
+  try{
+    const res = await fetch('M300-Database.xlsx');
+    if(!res.ok) return;
+    const blob = await res.blob();
+    const file = new File([blob],'M300-Database.xlsx');
+    // REMPLACER cette ligne:
+    // parseFile(file, (json)=>{ rawRows = json; postDataLoad(); }); 
+    // PAR CELLE-CI (qui appelle la fonction parseFile que vous venez de créer):
+    parseFile(file);
+  }catch(e){ console.warn('auto-load failed', e.message); }
+}
+
 
 /* ---------- Filters ---------- */
 function uniqueSorted(values){
@@ -190,4 +219,5 @@ loadGeoJSON().then(()=>{ /* ok or not - map renderers will check */ });
 
 // Ajoutez cette ligne pour lancer le chargement automatique du fichier Excel :
 tryAutoLoad(); 
+
 
