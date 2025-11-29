@@ -185,4 +185,9 @@ function loadGeoJSON(name='africa.geojson'){
 
 /* Try to load on startup */
 loadGeoJSON().then(()=>{ /* ok or not - map renderers will check */ });
+/* Try to load on startup */
+loadGeoJSON().then(()=>{ /* ok or not - map renderers will check */ });
+
+// Ajoutez cette ligne pour lancer le chargement automatique du fichier Excel :
+tryAutoLoad(); 
 
