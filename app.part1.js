@@ -156,6 +156,17 @@ function applyFiltersAndRender(){
   renderFinancing();
   renderDetailsTable();
 }
+/* auto load default M300-Database.xlsx if present (from same folder) */
+async function tryAutoLoad(){
+  try{
+    const res = await fetch('M300-Database.xlsx');
+    if(!res.ok) return;
+    const blob = await res.blob();
+    const file = new File([blob],'M300-Database.xlsx');
+    parseFile(file, (json)=>{ rawRows = json; postDataLoad(); });
+  }catch(e){ console.warn('auto-load failed', e.message); }
+}
+
 
 /* ---------- Auto load geojson attempt ---------- */
 function loadGeoJSON(name='africa.geojson'){
@@ -174,3 +185,4 @@ function loadGeoJSON(name='africa.geojson'){
 
 /* Try to load on startup */
 loadGeoJSON().then(()=>{ /* ok or not - map renderers will check */ });
+
