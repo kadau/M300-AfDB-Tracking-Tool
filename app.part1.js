@@ -45,13 +45,6 @@ const fileInput = document.getElementById('file-input');
 document.getElementById('btn-load').addEventListener('click', ()=> fileInput.click());
 fileInput.addEventListener('change', handleFileUpload);
 
-function handleFileUpload(e){
-  const f = e.target.files[0];
-/* ---------- File load ---------- */
-const fileInput = document.getElementById('file-input');
-document.getElementById('btn-load').addEventListener('click', ()=> fileInput.click());
-fileInput.addEventListener('change', handleFileUpload);
-
 // --- NOUVELLE FONCTION PARSEFILE ---
 function parseFile(f) {
   if(!f) return;
@@ -104,12 +97,11 @@ async function tryAutoLoad(){
     const blob = await res.blob();
     const file = new File([blob],'M300-Database.xlsx');
     
-    // REMPLACEZ la ligne problématique par celle-ci :
+    // CORRECTION : Appelez simplement parseFile avec le fichier comme argument unique
     parseFile(file); 
     
   }catch(e){ console.warn('auto-load failed', e.message); }
 }
-
 /* ---------- Filters ---------- */
 function uniqueSorted(values){
   const s = Array.from(new Set(values.filter(v=>v !== undefined && v !== null && String(v).trim() !== '').map(v=>String(v).trim())));
@@ -218,6 +210,7 @@ loadGeoJSON().then(()=>{ /* ok or not - map renderers will check */ });
 
 // Ajoutez cette ligne pour lancer le chargement automatique du fichier Excel :
 tryAutoLoad(); 
+
 
 
 
