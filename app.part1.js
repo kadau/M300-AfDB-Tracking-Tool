@@ -103,13 +103,12 @@ async function tryAutoLoad(){
     if(!res.ok) return;
     const blob = await res.blob();
     const file = new File([blob],'M300-Database.xlsx');
-    // REMPLACER cette ligne:
-    // parseFile(file, (json)=>{ rawRows = json; postDataLoad(); }); 
-    // PAR CELLE-CI (qui appelle la fonction parseFile que vous venez de créer):
-    parseFile(file);
+    
+    // REMPLACEZ la ligne problématique par celle-ci :
+    parseFile(file); 
+    
   }catch(e){ console.warn('auto-load failed', e.message); }
 }
-
 
 /* ---------- Filters ---------- */
 function uniqueSorted(values){
@@ -219,5 +218,6 @@ loadGeoJSON().then(()=>{ /* ok or not - map renderers will check */ });
 
 // Ajoutez cette ligne pour lancer le chargement automatique du fichier Excel :
 tryAutoLoad(); 
+
 
 
