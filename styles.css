@@ -76,6 +76,71 @@ main{padding:16px 20px}
 .oki-card{flex:1;background:var(--card);padding:12px;border-radius:10px;border:1px solid #eef5ef}
 .mini-gauge{height:48px}
 .mini-stats{margin-top:8px;color:var(--muted)}
+/* --- FIX: permettre l'affichage des jauges OKI --- */
+
+.mini-gauge {
+    height: auto !important;      /* ← débloque l'affichage */
+    min-height: 70px;             /* espace suffisant */
+    padding: 6px 4px;
+    display: block;               /* ou flex-column si tu préfères */
+}
+
+.mini-gauge .gitem {
+    margin-bottom: 12px;
+}
+
+.mini-gauge .lbl {
+    font-size: 12px;
+    font-weight: 600;
+    color: #223;
+    margin-bottom: 2px;
+}
+
+.mini-gauge .val {
+    font-size: 12px;
+    color: #223;
+    margin-bottom: 4px;
+    white-space: nowrap;
+}
+
+.mini-gauge .gbar {
+    height: 12px;
+    background: #e5e5e5;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.mini-gauge .gbar .fill {
+    height: 100%;
+    background: var(--afdb-green);
+    border-radius: 6px;
+    transition: width 0.5s ease;
+}
+/* OKI mini stats */
+.mini-stats {
+    margin-top: 4px;
+    font-size: 13px;
+    text-align: center;
+    color: var(--muted);
+}
+
+.mini-stats .bold {
+    color: var(--afdb-green-dark);
+    font-size: 14px;
+}
+/* OKI cards spacing */
+.oki-card h3 {
+    margin-top: 0;
+    margin-bottom: 6px;
+    font-size: 15px;
+    color: var(--afdb-green-dark);
+}
+
+.oki-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
 
 /* financing */
 .fin-grid{display:flex;gap:12px;align-items:flex-start}
@@ -103,3 +168,4 @@ main{padding:16px 20px}
 .center{text-align:center}
 .bold{font-weight:700}
 .num{white-space:nowrap}
+
