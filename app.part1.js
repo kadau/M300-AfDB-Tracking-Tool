@@ -89,19 +89,6 @@ function handleFileUpload(e){
   parseFile(f); // Appelle la nouvelle fonction
 }
 
-/* auto load default M300-Database.xlsx if present (from same folder) */
-async function tryAutoLoad(){
-  try{
-    const res = await fetch('M300-Database.xlsx');
-    if(!res.ok) return;
-    const blob = await res.blob();
-    const file = new File([blob],'M300-Database.xlsx');
-    
-    // CORRECTION : Appelez simplement parseFile avec le fichier comme argument unique
-    parseFile(file); 
-    
-  }catch(e){ console.warn('auto-load failed', e.message); }
-}
 /* ---------- Filters ---------- */
 function uniqueSorted(values){
   const s = Array.from(new Set(values.filter(v=>v !== undefined && v !== null && String(v).trim() !== '').map(v=>String(v).trim())));
@@ -171,7 +158,15 @@ function applyFiltersAndRender(){
   renderHouseholdsGauges();
   renderReportingTableMilestones();
   renderWaterfallChart();
-  renderMapMission300();
+    // Render Mission map — compatible avec les deux fonctions possibles
+  if (typeof renderMapMission === 'function') {
+    try { renderMapMission(); } catch(e){ console.warn('renderMapMission error', e); }
+  } else if (typeof renderMapMission300 === 'function') {
+    try { renderMapMission300(); } catch(e){ console.warn('renderMapMission300 error', e); }
+  } else {
+    console.warn('No mission map renderer found (renderMapMission or renderMapMission300).');
+  }
+;
   renderOthersIndicators();
   renderFinancing();
   renderDetailsTable();
@@ -188,25 +183,34 @@ async function tryAutoLoad(){
 }
 
 
-/* ---------- Auto load geojson attempt ---------- */
-function loadGeoJSON(name='africa.geojson'){
-  return fetch(name).then(r=>{
-    if(!r.ok) throw new Error('not found');
-    return r.json();
-  }).then(gj=>{
-    geojsonData = gj;
-    return gj;
-  }).catch(e=>{
-    console.warn('geojson load failed', e);
-    geojsonData = null;
-    return null;
-  });
+/* ---------- Auto load geojson attempt (compatible) ---------- */
+function loadGeoJSON(name='lib/africa.geojson'){
+  return fetch(name)
+    .then(r=>{
+      if(!r.ok) throw new Error('not found: ' + name);
+      return r.json();
+    })
+    .then(gj=>{
+      // store in both variables for backward & new code compatibility
+      window.geojsonData = gj;
+      window.geojsonDataMission = gj;
+
+      console.log('GeoJSON loaded:', gj.features.length, 'features');
+      return gj;
+    })
+    .catch(e=>{
+      console.warn('geojson load failed', e);
+      window.geojsonData = null;
+      window.geojsonDataMission = null;
+      return null;
+    });
 }
 
-/* Try to load on startup */
-loadGeoJSON().then(()=>{ /* ok or not - map renderers will check */ });
-/* Try to load on startup */
-loadGeoJSON().then(()=>{ /* ok or not - map renderers will check */ });
+
+// Load GEOJSON once only
+loadGeoJSON().then(() => {
+    console.log("GeoJSON ready");
+});
 
 // Ajoutez cette ligne pour lancer le chargement automatique du fichier Excel :
 tryAutoLoad(); 
