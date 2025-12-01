@@ -31,147 +31,280 @@ function renderReportingTableMilestones(){
 }
 
 /* ---------- Waterfall chart ---------- */
+/* === WATERFALL CHART — Cascade / ESCALIER === */
+
 let waterfallChart = null;
-function renderWaterfallChart(){
-  const vals = renderReportingTableMilestones();
-  const achieved = vals.slice(0,3);
-  const expected = vals.slice(3,8);
-  const labels = ['2023','2024','2025','2026','2027','2028','2029','2030','Total'];
 
-  const achievedSum = achieved.reduce((a,b)=>a+b,0);
-  const expectedSum = expected.reduce((a,b)=>a+b,0);
-  const total = achievedSum + expectedSum;
+function renderWaterfallChart() {
+    const vals = (typeof renderReportingTableMilestones === "function")
+        ? renderReportingTableMilestones()
+        : lastReportingYears || [];
 
-  // Build arrays where Achieved values are positioned and Expected positioned for stacked look
-  const dataAch = [achieved[0]||0, achieved[1]||0, achieved[2]||0, 0,0,0,0,0, achievedSum];
-  const dataExp = [0,0,0, expected[0]||0, expected[1]||0, expected[2]||0, expected[3]||0, expected[4]||0, expectedSum];
+    const years = [2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030];
 
-  // For final Total column we want bicolour: Achieved at bottom and Expected on top
-  const ctx = document.getElementById('waterfall-chart').getContext('2d');
-  if(waterfallChart) waterfallChart.destroy();
-  waterfallChart = new Chart(ctx, {
-    type:'bar',
-    data:{
-      labels: labels,
-      datasets: [
-        { label:'Achieved', data: dataAch, backgroundColor: '#1B8754', stack:'s1' },
-        { label:'Expected', data: dataExp, backgroundColor: '#c7ceca', stack:'s1' }
-      ]
-    },
-    options:{
-      responsive:true,
-      scales:{
-        x:{ stacked:true },
-        y:{
-          stacked:true,
-          ticks:{
-            callback: function(value){ return (value/1000000) + ' M'; }
-          }
+    const achieved = vals.slice(0, 3).map(v => Number(v || 0));     // 2023–2025
+    const expected = vals.slice(3, 8).map(v => Number(v || 0));     // 2026–2030
+
+    const achievedSum = achieved.reduce((a, b) => a + b, 0);
+    const expectedSum = expected.reduce((a, b) => a + b, 0);
+
+    const total = achievedSum + expectedSum;
+
+    // === Construire les valeurs waterfall ===
+    const labels = ['2023','2024','2025','2026','2027','2028','2029','2030','Total'];
+
+    // Dataset “invisible” pour créer les marches
+    let baseline = [];
+    let achievedBars = [];
+    let expectedBars = [];
+
+    let cumulative = 0;
+
+    // Années individuelles
+    for (let i = 0; i < 8; i++) {
+        baseline.push(cumulative);
+
+        if (i < 3) {
+            // Achieved (2023-2025)
+            achievedBars.push(achieved[i]);
+            expectedBars.push(0);
+            cumulative += achieved[i];
+        } else {
+            // Expected (2026-2030)
+            achievedBars.push(0);
+            expectedBars.push(expected[i - 3]);
+            cumulative += expected[i - 3];
         }
-      },
-      plugins:{
-        legend:{ position:'top' }
-      }
     }
-  });
+
+    // Dernière barre = Total
+    baseline.push(0);                 // barre finale au niveau zéro
+    achievedBars.push(achievedSum);
+    expectedBars.push(expectedSum);
+
+    const ctx = document.getElementById('waterfall-chart').getContext('2d');
+    if (waterfallChart) waterfallChart.destroy();
+
+    waterfallChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Baseline',
+                    data: baseline,
+                    backgroundColor: 'rgba(0,0,0,0)',   // invisible
+                    borderWidth: 0,
+                    stack: 'stack'
+                },
+                {
+                    label: 'Achieved',
+                    data: achievedBars,
+                    backgroundColor: '#1B8754',
+                    borderRadius: 4,
+                    stack: 'stack'
+                },
+                {
+                    label: 'Expected',
+                    data: expectedBars,
+                    backgroundColor: '#c7ceca',
+                    borderRadius: 4,
+                    stack: 'stack'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top' },
+            },
+            scales: {
+                x: {
+                    stacked: true,
+                    grid: { display: false }
+                },
+                y: {
+                    stacked: true,
+                    grid: { display: false },
+                    ticks: {
+                        callback: function (value) {
+                            if (value >= 1_000_000)
+                                return (value / 1_000_000).toFixed(0) + ' M';
+                            return value;
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
 
 /* ---------- Map Mission 300 (choropleth + bubbles) ---------- */
-function ensureMapMission(){
-  if(mapMission) return;
-  mapMission = L.map('map-mission', {minZoom:2, worldCopyJump:true}).setView([6.5,20],3);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:''}).addTo(mapMission);
-  markerLayer = L.layerGroup().addTo(mapMission);
+/* =====================================================================
+   MISSION 300 — Choropleth + Proportional Bubbles
+   ===================================================================== */
+
+let missionMap = null;
+let missionLayer = null;
+let missionBubbleLayer = null;
+
+/* Dégradé vert AfDB */
+function getColorMission(v, max) {
+  if (max === 0) return "#e9f7ef";
+  const pct = v / max;
+  if (pct > 0.80) return "#1B8754";
+  if (pct > 0.60) return "#54b56f";
+  if (pct > 0.40) return "#93d2a2";
+  if (pct > 0.20) return "#c8e6ce";
+  return "#e9f7ef";
 }
 
-function aggregateMapMission300(){
-  const rows = filteredRows.filter(r =>
-    (r['Global/Milestone']||'').toString().trim().toLowerCase() === 'milestone' &&
-    (r['Sub-Sub-indicators']||'').toString().trim().toLowerCase() === 'households' &&
-    (r['Expected/Delivered']||'').toString().trim().toLowerCase() === 'delivered'
-  );
-  const agg = {};
-  rows.forEach(r=>{
-    const c = (r['Country']||'').toString().trim();
-    if(!c) return;
-    agg[c] = (agg[c]||0) + safeNum(r['People provided with access to electricity']);
-  });
-  return agg;
+/* ---------------- Mission 300 MAP (choropleth + bubbles) ---------------- */
+
+function normalizeCountryName(name) {
+    if (!name) return "";
+    return name.toString().trim().toLowerCase()
+        .replace(/’/g, "'")
+        .replace(/é/g, "e")
+        .replace(/è/g, "e")
+        .replace(/ê/g, "e")
+        .replace(/à/g, "a")
+        .replace(/î/g, "i")
+        .replace(/ï/g, "i")
+        .replace(/ô/g, "o");
 }
 
-function renderMapMission300(){
-  ensureMapMission();
-  // clear layers
-  if(choroplethLayer){ mapMission.removeLayer(choroplethLayer); choroplethLayer = null; }
-  if(markerLayer){ markerLayer.clearLayers(); }
+function getCountryNameFromFeature(f) {
+    const props = f.properties || {};
 
-  const data = aggregateMapMission300();
-  const values = Object.values(data);
-  const maxVal = values.length ? Math.max(...values) : 0;
+    return (
+        props.ADMIN ||
+        props.ADMIN_NAME ||
+        props.NAME_LONG ||
+        props.NAME ||
+        props.COUNTRY ||
+        ""
+    );
+}
 
-  if(geojsonData){
-    function styleFeature(feature){
-      const countryName = (feature.properties && (feature.properties.ADMIN || feature.properties.NAME || feature.properties.NAME_LONG)) || '';
-      const v = data[countryName] || 0;
-      const ratio = maxVal>0 ? v/maxVal : 0;
-      const alpha = 0.35 + ratio*0.55;
-      const fill = `rgba(27,135,84,${alpha})`;
-      return { color:'#e6efe6', weight:1, fillColor: fill, fillOpacity: alpha };
+/* ---------------- Mission 300 MAP (choropleth + bubbles) ---------------- */
+
+function getColorMission(value, max) {
+    if (max === 0) return "#e0f2e9"; // gris/vert très clair si aucune donnée
+
+    const ratio = value / max;
+
+    // VRAI dégradé du vert clair au vert foncé AfDB
+    const start = [230, 245, 238]; // vert très clair
+    const end   = [27, 135, 84];   // vert AfDB
+
+    const r = Math.round(start[0] + (end[0] - start[0]) * ratio);
+    const g = Math.round(start[1] + (end[1] - start[1]) * ratio);
+    const b = Math.round(start[2] + (end[2] - start[2]) * ratio);
+
+    return `rgb(${r},${g},${b})`;
+}
+
+function renderMapMission() {
+
+    const container = document.getElementById("map-mission");
+    if (!container) return;
+
+    const geo = window.geojsonDataMission;
+    if (!geo || !geo.features) {
+        console.warn("GeoJSON non chargé, carte ignorée.");
+        return;
     }
-    choroplethLayer = L.geoJSON(geojsonData, {
-      style: styleFeature,
-      onEachFeature: function(feature, layer){
-        const countryName = (feature.properties && (feature.properties.ADMIN || feature.properties.NAME)) || '';
-        const v = data[countryName] || 0;
-        layer.bindTooltip(`${countryName}\n${formatNum(v)} People access (delivered)`);
-      }
-    }).addTo(mapMission);
-  }
 
-  // add bubbles using centroid via bounds
-  if(geojsonData && geojsonData.features){
-    for(const feat of geojsonData.features){
-      const countryName = (feat.properties && (feat.properties.ADMIN || feat.properties.NAME)) || '';
-      const v = data[countryName] || 0;
-      if(!v) continue;
-      const layerFeat = L.geoJSON(feat);
-      const bounds = layerFeat.getBounds();
-      const center = bounds.getCenter();
-      const radius = Math.max(6, Math.sqrt(v / (maxVal||1)) * 40);
-      const circ = L.circleMarker(center, {
-        radius: radius,
-        color: '#0b5d2e',
-        fillColor: '#8fd1b0',
-        fillOpacity: 0.85,
-        weight:1
-      }).bindTooltip(`${countryName}\n${formatNum(v)} People access (delivered)`);
-      markerLayer.addLayer(circ);
-    }
-  } else {
-    // fallback: place a single center marker if no geojson
-    Object.keys(data).forEach(country=>{
-      const v = data[country];
-      if(v<=0) return;
-      const center = mapMission.getCenter();
-      const radius = Math.max(6, Math.sqrt(v / (maxVal||1)) * 40);
-      const circ = L.circleMarker(center, {
-        radius: radius,
-        color: '#0b5d2e',
-        fillColor: '#8fd1b0',
-        fillOpacity: 0.85,
-        weight:1
-      }).bindTooltip(`${country}\n${formatNum(v)} People access (delivered)`);
-      markerLayer.addLayer(circ);
+    /* AGRÉGATION DES DONNÉES */
+    const rows = filteredRows.filter(r =>
+        (r["Global/Milestone"] || "").toString().trim().toLowerCase() === "milestone" &&
+        (r["Expected/Delivered"] || "").toString().trim().toLowerCase() === "delivered"
+    );
+
+    const agg = {};
+    rows.forEach(r => {
+        const country = normalizeCountryName(r["Country"]);
+        const val = safeNum(r["People provided with access to electricity"]);
+        if (!agg[country]) agg[country] = 0;
+        agg[country] += val;
     });
-  }
 
-  // fit bounds if possible
-  try{
-    const group = L.featureGroup([choroplethLayer, markerLayer]);
-    mapMission.fitBounds(group.getBounds(), {padding:[20,20]});
-  }catch(e){}
-  setTimeout(()=>mapMission.invalidateSize(),300);
+    const maxVal = Math.max(...Object.values(agg), 0);
+
+    /* INITIALISATION DE LA CARTE */
+    if (!missionMap) {
+        missionMap = L.map("map-mission", {
+            center: [8, 20],
+            zoom: 3,
+            worldCopyJump: true
+        });
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(missionMap);
+        missionLayer = L.layerGroup().addTo(missionMap);
+        missionBubbleLayer = L.layerGroup().addTo(missionMap);
+    }
+
+    missionLayer.clearLayers();
+    missionBubbleLayer.clearLayers();
+
+    /* CHOROPLETH : SEULEMENT LES PAYS AVEC DONNÉES ONT UNE COULEUR */
+    L.geoJson(geo, {
+        style: f => {
+            const nameRaw = getCountryNameFromFeature(f);
+            const name = normalizeCountryName(nameRaw);
+            const val = agg[name] || 0;
+
+            if (val === 0) {
+                return {
+                    fillColor: "#f2f2f2", // gris clair = pas de données
+                    fillOpacity: 0.3,
+                    color: "#aaa",
+                    weight: 0.5
+                };
+            }
+
+            return {
+                fillColor: getColorMission(val, maxVal),
+                fillOpacity: 0.8,
+                color: "#666",
+                weight: 1
+            };
+        },
+        onEachFeature: (feature, layer) => {
+            const name = getCountryNameFromFeature(feature);
+            const val = agg[normalizeCountryName(name)] || 0;
+            layer.bindTooltip(`<b>${name}</b><br>${formatNum(val)} delivered`, { sticky: true });
+        }
+    }).addTo(missionLayer);
+
+    /* ---------------- BULLES PROPORTIONNELLES CORRIGÉES ---------------- */
+
+    geo.features.forEach(f => {
+        const nameRaw = getCountryNameFromFeature(f);
+        const name = normalizeCountryName(nameRaw);
+        const val = agg[name] || 0;
+
+        if (val <= 0) return;
+
+        const center = L.geoJson(f).getBounds().getCenter();
+
+        // NOUVELLE FORMULE → taille adaptée au continent africain
+        const radius = Math.max(3, Math.sqrt(val) * 0.02);  // 🔥 taille fortement réduite
+
+        L.circleMarker(center, {
+            radius,
+            color: "#0b5d2e",
+            fillColor: "#1B8754",
+            fillOpacity: 0.6
+        })
+            .bindTooltip(`<b>${nameRaw}</b><br>${formatNum(val)} delivered`, { sticky: true })
+            .addTo(missionBubbleLayer);
+    });
+
+    missionMap.invalidateSize();
 }
+
 
 /* ---------- OKI map (reusable) ---------- */
 function ensureMapOKI(){
@@ -181,70 +314,56 @@ function ensureMapOKI(){
   markerOKI = L.layerGroup().addTo(mapOKI);
 }
 
-/* ---------- render Others Key Indicators & map ---------- */
-function renderOthersIndicators(){
-  const rows = filteredRows.filter(r => (r['Global/Milestone']||'').toString().trim().toLowerCase() === 'global');
-  function measure(col, mode){
-    return rows.reduce((s,r)=>{
-      const m = ((r['Expected/Delivered']||'').toString().trim().toLowerCase()) === mode;
-      return s + (m ? safeNum(r[col]) : 0);
-    },0);
-  }
-  const powerExp = measure('Power capacity installed (MW)','expected');
-  const powerDel = measure('Power capacity installed (MW)','delivered');
-  const transExp = measure('Cross-border and National Transmission Lines (KM)','expected');
-  const transDel = measure('Cross-border and National Transmission Lines (KM)','delivered');
-  const distExp = measure('New or improved power distribution lines (KM)','expected');
-  const distDel = measure('New or improved power distribution lines (KM)','delivered');
+/* ============================================================
+   OTHERS KEY INDICATORS — Jauges + Expected / Delivered / %
+   ============================================================ */
+/* ============================================================
+   OTHERS KEY INDICATORS — Corrected version (no Sub-Sub-indicators)
+   ============================================================ */
+/* ---------- OTHERS KEY INDICATORS (fixed: one gauge only) ---------- */
+function renderOthersIndicators() {
+    if (!filteredRows.length) return;
 
-  document.getElementById('g-power').innerHTML = `<div style="font-weight:700">${formatNum(powerDel)} / ${formatNum(powerExp)}</div>`;
-  document.getElementById('g-power-stats').innerHTML = `${Math.round(powerExp?powerDel/powerExp*100:0)}% Delivered`;
-  document.getElementById('g-trans').innerHTML = `<div style="font-weight:700">${formatNum(transDel)} / ${formatNum(transExp)}</div>`;
-  document.getElementById('g-trans-stats').innerHTML = `${Math.round(transExp?transDel/transExp*100:0)}% Delivered`;
-  document.getElementById('g-dist').innerHTML = `<div style="font-weight:700">${formatNum(distDel)} / ${formatNum(distExp)}</div>`;
-  document.getElementById('g-dist-stats').innerHTML = `${Math.round(distExp?distDel/distExp*100:0)}% Delivered`;
+    const INDICATORS = {
+        power: "Power capacity installed (MW)",
+        trans: "Cross-border and National Transmission Lines (KM)",
+        dist: "New or improved power distribution lines (KM)"
+    };
 
-  // Render OKI map for 'Delivered' of Power capacity by country (example)
-  ensureMapOKI();
-  markerOKI.clearLayers();
-  // choose active indicator: for simplicity default to power (could add selector)
-  const agg = {};
-  filteredRows.filter(r => (r['Global/Milestone']||'').toString().trim().toLowerCase()==='global').forEach(r=>{
-    const c = (r['Country']||'').toString().trim();
-    if(!c) return;
-    const v = safeNum(r['Power capacity installed (MW)']) * (((r['Expected/Delivered']||'').toString().trim().toLowerCase()==='delivered')?1:0);
-    agg[c] = (agg[c]||0) + v;
-  });
-  const vals = Object.values(agg); const maxVal = vals.length?Math.max(...vals):0;
-  if(geojsonData && mapOKI){
-    // add choropleth and bubbles for OKI
-    try{
-      if(mapOKI._layers && Object.keys(mapOKI._layers).length){
-        // remove existing geojson layers except the tile layer, simple approach: recreate map
-      }
-      // add bubbles
-      for(const feat of (geojsonData.features||[])){
-        const countryName = (feat.properties && (feat.properties.ADMIN || feat.properties.NAME)) || '';
-        const v = agg[countryName] || 0;
-        if(!v) continue;
-        const layerFeat = L.geoJSON(feat);
-        const center = layerFeat.getBounds().getCenter();
-        const radius = Math.max(6, Math.sqrt(v / (maxVal||1)) * 30);
-        const circ = L.circleMarker(center, {
-          radius: radius,
-          color: '#0b5d2e',
-          fillColor: '#8fd1b0',
-          fillOpacity: 0.85,
-          weight:1
-        }).bindTooltip(`${countryName}\n${formatNum(v)} Delivered`);
-        markerOKI.addLayer(circ);
-      }
-      try{
-        mapOKI.fitBounds(markerOKI.getBounds(), {padding:[20,20]});
-      }catch(e){}
-    }catch(e){
-      console.warn('OKI map error', e);
-    }
-  }
-  setTimeout(()=>{ if(mapOKI) mapOKI.invalidateSize(); },300);
+    const targets = {
+        power: { div: "g-power", stats: "g-power-stats" },
+        trans: { div: "g-trans", stats: "g-trans-stats" },
+        dist: { div: "g-dist", stats: "g-dist-stats" }
+    };
+
+    Object.keys(INDICATORS).forEach(key => {
+        const column = INDICATORS[key];
+        const box = document.getElementById(targets[key].div);
+        const stats = document.getElementById(targets[key].stats);
+
+        let expected = 0, delivered = 0;
+
+        filteredRows.forEach(r => {
+            const value = safeNum(r[column]);
+            const status = (r["Expected/Delivered"] || "").trim().toLowerCase();
+            if (status === "expected") expected += value;
+            if (status === "delivered") delivered += value;
+        });
+
+        const pct = expected > 0 ? Math.round((delivered / expected) * 100) : 0;
+
+        /* ---- SINGLE JUDGE ---- */
+        box.innerHTML = `
+            <div class="gitem">
+                <div class="lbl">Expected : ${formatNum(expected)}</div>
+                <div class="lbl">Delivered : ${formatNum(delivered)}</div>
+
+                <div class="gbar" style="margin-top:6px;">
+                    <div class="fill" style="width:${pct}%"></div>
+                </div>
+            </div>
+        `;
+
+        stats.innerHTML = `<span class="bold">${pct}% Delivered</span>`;
+    });
 }
